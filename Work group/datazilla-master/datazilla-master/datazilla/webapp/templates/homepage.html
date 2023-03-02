@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Perf-o-Matic</title>
+{% if DEBUG %}
+    <link rel="stylesheet" href="/static/css/jquery-ui/jquery-ui-1.10.2.custom.min.css" type="text/css"/>
+    <link rel="stylesheet" href="/static/css/Aristo/jquery-ui-1.8.7.custom.css" type="text/css"/>
+    <link rel="stylesheet" href="/static/css/jquery-ui/jquery-ui-1.10.2.themes.smoothness.css" type="text/css"/>
+    <link rel="stylesheet" href="/static/css/iThing.css"/>
+    <link rel="stylesheet" href="/static/js/plugins/colorpicker/jquery.colorpicker.css"/>
+    <link rel="stylesheet" href="/static/css/homepage.css" type="text/css"/>
+{% else %}
+    <link rel="stylesheet" href="/static/css/homepage-min.css" type="text/css"/>
+{% endif %}
+
+</head>
+
+<body>
+
+<!--Toppanel-->
+
+<div class="ui-widget ui-widget-header hp-container hp-light-text">
+    <div class="hp-toppanel">
+        <div class="hp-title">
+            <a href=""><span id="logo"></span></a>
+        </div>
+    </div>
+    <div style="position:fixed; background:white; height:32px; top:29px; width:100%;" class="ui-widget ui-widget-header">
+
+    <div style="top:30px;" class="hp-control-container">
+
+        <div style="display:inline;" class="hp-light-text">
+            <div class="hp-control-element">
+                Project:
+                <select id="hp_project">
+                    {% for p in PROJECTS %}
+                        <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="hp-control-element">
+                Product/Repository:
+                <select id="hp_repository"></select>
+            </div>
+
+            <div class="hp-control-element" title="Search a comma delimited list of revisions, machine names, or processor types (x86, x86_64)">
+                Search Graphs:
+                <input id="hp_input" type="text" size="40" />
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+<div id="hp_failed_get_dialogue" style="display:none;">
+    <p>HTTP GET request failed</p>
+    <div class="ui-state-error ui-corner-all" style="padding: 0 .7em;">
+        <div>Status: <span id="hp_text_status"></span></div>
+        <div>Status Code: <span id="hp_status_code"></span></div>
+        <div>Error thrown: <span id="hp_error_thrown"></span></div>
+    </div>
+</div>
+<!-- NOTE: The graph container controls div is inserted into the jquery-ui .ui-tabs-nav container dynamically in javascript.-->
+<div style="display:none;" class="hp-graph-container-controls">
+    <div style="margin:3px;" class="hp-light-text">
+        <span style="margin-right:5px;">Graph Controls:</span>
+        <label id="hp_x86" title="Show only test results from 32 bit platforms" style="margin-right:5px;">x86 <input type="checkbox" checked="checked"/></label>
+        <label id="hp_x86_64" title="Show only test results from 64 bit platforms" style="margin-right:5px;">x86_64 <input type="checkbox" checked="checked"/></label>
+        <label id="hp_error_bars" title="Toggle error bars" style="margin-right:5px;">Error bars <input type="checkbox" checked="checked"/></label>
+        <span title="Select a Product/Repository to compare to. This will add a new series to all displayed graphs for the selected Product/Repository combination." style="margin-right:5px;">
+            Compare To:
+            <select id="hp_compare_options" type="checkbox"></select>
+        </span>
+        <input id="hp_compare_series_color" style="width:45px;" type="text" class="cp-basic" value="7327c5" title="Click to set the compare Product/Repository series color"/>
+        <span class="cp-basic-target" style="width:20px; height:15px;">&nbsp;&nbsp;&nbsp;</span>
+    </div>
+</div>
+<div id="hp_main_wait" class="hp-spinner"></div>
+<div id="hp_container" style="display:none;" class="ui-widget ui-widget-header ui-corner-top hp-container-two hp-light-text">
+
+    <div id="slider" class="ui-rangeSlider ui-dateRangeSlider hp-slider-container"></div>
+    <div style="margin-top:75px; float:left; width:100%; text-align:center;" class="hp-light-text">Hints: Click a data point to search by revision, hover over data to see details. Double click graph to zoom, click & drag graph to pan.</div>
+    <div id="hp_tabs" style="margin-top:100px;">
+        <ul>
+            <li><a href="#hp-metrics">Metrics</a></li>
+        </ul>
+        <div id="hp-metrics" style="height:1000px;">
+
+            <div class="hp-list">
+                <div class="ui-widget ui-widget-header ui-corner-top hp-list-controls">
+                    <div style="padding:5px;">Browse By Platform</div>
+                </div>
+                <div id="hp_platform_menu" class="ui-corner-bottom"></div>
+                <div style="margin-top:5px;" class="ui-widget ui-widget-header ui-corner-top hp-list-controls">
+                    <div style="padding:5px;">Browse By Suite </div>
+                </div>
+                <div id="hp_test_menu" class="ui-corner-bottom">
+                </div>
+            </div>
+            <div class="ui-widget ui-widget-header ui-corner-top hp-graph-controls">
+                <div id="hp_nav" class="hp-control-element"></div>
+                <div id="hp_linegraph_wait" class="hp-spinner"></div>
+                <div id="hp_no_data" class="hp-no-data"></div>
+                <div id="hp_linegraphs" style="display:none;" class="hp-line-graph-container">
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--This div insures that the last graph is visible above the detail panel -->
+    <div style="height:225px;"></div>
+    <div id="hp_detail_panel" class="ui-widget ui-widget-header ui-corner-bottom hp-graph-control-container">
+
+        <div class="ui-widget ui-widget-header hp-tip-control-panel">
+            <div id="hp_toolbar_details" style="display:inline; float:left;"></div>
+            <div style="display:inline; float:left;" class="hp-hover-inline-datum">
+                <span class="hp-light-text">min:&nbsp;</span><span id="hp_replicate_min"></span><span style="margin-left:10px;" class="hp-light-text">max:&nbsp;</span><span id="hp_replicate_max"></span><span style="margin-left:35px;" class="hp-light-text">search:&nbsp;</span><a id="hp_search_machine" title="Click the machine name to highlight it in all graphs" href="#"></a>
+            </div>
+
+            <span style="float-left; margin-left:25px; margin-bottom:2px;">
+                <label title="Locks replicate display on last data point clicked.">Lock: <input id="hp_replicate_lock" type="checkbox" /></label>
+            </span>
+
+            <span id="hp_close_detail_panel" style="float:right; margin-right:8px;" class="ui-icon ui-icon-close" title="Close detail panel" ></span>
+
+        </div>
+        <div id="hp_hover_detail_one" class="hp-tip-panel"></div>
+        <div id="hp_replicate_wait" style="width:550px;" class="hp-replicate-graph-panel hp-replicate-spinner"></div>
+        <div id="hp_replicates" class="hp-replicate-graph-panel"></div>
+        <div id="hp_hover_detail_two" class="hp-replicate-hover-panel">
+            <div><span class="hp-light-text">Replicate:&nbsp;</span><span id="hp_replicate_num"></span></div>
+            <div><span class="hp-light-text">Run Time:&nbsp;</span><span id="hp_replicate_run_time"></span><span style="margin-left:3px;" class="hp-light-text">&nbsp;ms</span></div>
+
+            <div style="margin-top:5px;">
+                <a href="" id="hp_view_json_objects" target="_blank" class="hp-light-text" title="Click to see all json objects">View Json Objects</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if DEBUG %}
+<script type="text/javascript" src="/static/js/plugins/jquery/jquery-1.9.1.min.js"></script>
+<script type="text/javascript" src="/static/js/plugins/jquery/jquery-ui-1.10.2.custom.min.js"></script>
+<script type="text/javascript" src="/static/js/plugins/jQRangeSlider-min/jQDateRangeSlider-min.js"></script>
+<script type="text/javascript" src="/static/js/plugins/jquery.history.js"></script>
+<script type="text/javascript" src="/static/js/plugins/jquery.url.js"></script>
+
+
+<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="/static/js/plugins/flot-0.7/excanvas.min.js"></script><![endif]-->
+
+<script type="text/javascript" src="/static/js/plugins/underscore-min.js"></script>
+<script type="text/javascript" src="/static/js/plugins/box.js"></script>
+
+<!-- Gives core mootools class functionality to jQuery -->
+<script type="text/javascript" src="/static/js/plugins/mootools-core-1.4.0.js"></script>
+<script type="text/javascript" src="/static/js/plugins/moo4q/Source/Class.Mutators.jQuery.js"></script>
+<script type="text/javascript" src="/static/js/plugins/flot-0.7/jquery.flot.min.js"></script>
+<script type="text/javascript" src="/static/js/plugins/flot-0.7/jquery.flot.errorbars.js"></script>
+<!--
+The versions of jquery.event.drag-2.2.js and jquery.mousewheel.js that are embedded in jquery.flot.navigate.js
+do not work with the current version of jquery. To compensate, loading the required js modules separately. Disabling
+jquery.mouse.wheel.js entirely by not loading it and commenting it out in jquery.flot.navigate.js, the functionality
+is to disruptive with scrolling the page.
+-->
+<script type="text/javascript" src="/static/js/plugins/jquery.event.drag-2.2.js"></script>
+<script type="text/javascript" src="/static/js/plugins/flot-0.7/jquery.flot.navigate.js"></script>
+
+
+<script type="text/javascript" src="/static/js/plugins/json2.js"></script>
+
+
+<script type="text/javascript" src="/static/js/plugins/colorpicker/jquery.colorpicker.js"></script>
+
+<!-- Homepage classes -->
+<script type="text/javascript" src="/static/js/common/Bases.js"></script>
+<script type="text/javascript" src="/static/js/homepage/SelectionState.js"></script>
+<script type="text/javascript" src="/static/js/homepage/HomePage.js"></script>
+<script type="text/javascript" src="/static/js/homepage/SliderComponent.js"></script>
+<script type="text/javascript" src="/static/js/homepage/NavComponent.js"></script>
+<script type="text/javascript" src="/static/js/homepage/LineGraphComponent.js"></script>
+
+{% else %}
+<script type="text/javascript" src="/static/js/homepage/homepage-min.js"></script>
+
+<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="/static/js/plugins/flot-0.7/excanvas.min.js"></script><![endif]-->
+{% endif %}
+
+</body>
+</html>
